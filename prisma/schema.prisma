@@ -1,0 +1,318 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  CUSTOMER
+  RESTAURANT
+  DELIVERY
+  ADMIN
+}
+
+enum SubscriptionTier {
+  FREE
+  BASIC
+  PREMIUM
+}
+
+enum VideoCategory {
+  TACOS
+  PIZZA
+  SUSHI
+  HAMBURGUESAS
+  ENSALADAS
+  POSTRES
+  BEBIDAS
+  OTRO
+}
+
+enum PriceRange {
+  ECONOMICO
+  MEDIO
+  PREMIUM
+}
+
+// ============================================
+// MODELOS
+// ============================================
+
+model User {
+  id            String      @id @default(uuid())
+  email         String      @unique
+  password      String
+  name          String
+  phone         String?
+  role          UserRole    @default(CUSTOMER)
+  
+  // Ubicación del usuario (para recomendaciones)
+  location      Json?       // { lat: number, lng: number }
+  
+  // Preferencias (para algoritmo de recomendación)
+  preferences   Json?       // { categories: string[], tags: string[], maxPrice: number }
+  
+  // Avatar
+  avatarUrl     String?
+  
+  // Verificación
+  isVerified    Boolean     @default(false)
+  verifiedAt    DateTime?
+  
+  // Tokens de refresh
+  refreshToken  String?
+  
+  // Relaciones
+  restaurant    Restaurant? // Solo si es RESTAURANT
+  views         VideoView[]
+  likes         Like[]
+  favorites     Favorite[]
+  
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  
+  @@index([email])
+  @@index([role])
+}
+
+model Restaurant {
+  id                  String            @id @default(uuid())
+  userId              String            @unique
+  name                String
+  description         String?
+  address             String
+  phone               String
+  
+  // Ubicación
+  location            Json?             // { lat: number, lng: number, address: string }
+  
+  // Rating y estadísticas
+  rating              Float?            @default(0)
+  totalReviews        Int               @default(0)
+  totalVideos         Int               @default(0)
+  totalViews          Int               @default(0)
+  
+  // Suscripción
+  subscriptionTier    SubscriptionTier  @default(FREE)
+  subscriptionStartAt DateTime?
+  subscriptionEndsAt  DateTime?
+  
+  // Límites según suscripción
+  maxVideosPerMonth   Int               @default(10)
+  videosUploadedThisMonth Int           @default(0)
+  
+  // Publicidad
+  canSponsorVideos    Boolean           @default(false)
+  adBudget            Float             @default(0)
+  
+  // Imágenes
+  logoUrl             String?
+  coverUrl            String?
+  
+  // Categorías del restaurante
+  categories          String[]          // ['tacos', 'quesadillas', 'tortas']
+  
+  // Horarios de operación
+  schedule            Json?             // { monday: { open: '09:00', close: '22:00' }, ... }
+  
+  // Estado
+  isActive            Boolean           @default(true)
+  
+  // Relaciones
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos              Video[]
+  dishes              Dish[]
+  
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  
+  @@index([userId])
+  @@index([subscriptionTier])
+  @@index([isActive])
+}
+
+model Dish {
+  id              String        @id @default(uuid())
+  restaurantId    String
+  name            String
+  description     String?
+  price           Float
+  category        VideoCategory
+  
+  // Imagen del platillo
+  imageUrl        String?
+  
+  // Enlaces a plataformas de delivery
+  uberEatsLink    String?
+  didiLink        String?
+  rappiLink       String?
+  
+  // Disponibilidad
+  isAvailable     Boolean       @default(true)
+  
+  // Estadísticas
+  totalOrders     Int           @default(0)
+  totalViews      Int           @default(0)
+  
+  // Relaciones
+  restaurant      Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  videos          Video[]
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  @@index([restaurantId])
+  @@index([category])
+  @@index([isAvailable])
+}
+
+model Video {
+  id                String        @id @default(uuid())
+  restaurantId      String
+  dishId            String
+  
+  // Cloudinary
+  cloudinaryUrl     String
+  cloudinaryPublicId String
+  
+  // Metadata del video
+  title             String?
+  description       String?
+  duration          Int?          // Duración en segundos
+  thumbnailUrl      String?
+  
+  // Categorización
+  tags              String[]      // ['picante', 'vegano', 'sin gluten']
+  category          VideoCategory
+  priceRange        PriceRange?
+  
+  // Enlaces a plataformas de delivery (heredados del dish o custom)
+  deliveryLinks     Json?         // { uber: "url", didi: "url", rappi: "url" }
+  
+  // Métricas de engagement
+  viewsCount        Int           @default(0)
+  likesCount        Int           @default(0)
+  favoritesCount    Int           @default(0)
+  sharesCount       Int           @default(0)
+  clicksToOrder     Int           @default(0)  // Clicks en enlaces de delivery
+  
+  // Métricas calculadas (actualizadas por job)
+  popularityScore   Float         @default(0)  // Score general de popularidad
+  qualityScore      Float         @default(0)  // Engagement rate
+  conversionRate    Float         @default(0)  // clicksToOrder / viewsCount
+  
+  // Publicidad
+  isSponsored       Boolean       @default(false)
+  sponsoredUntil    DateTime?
+  sponsoredBudget   Float         @default(0)
+  sponsoredImpressions Int        @default(0)
+  
+  // Estado
+  isActive          Boolean       @default(true)
+  isPublic          Boolean       @default(true)
+  
+  // Relaciones
+  restaurant        Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  dish              Dish          @relation(fields: [dishId], references: [id], onDelete: Cascade)
+  views             VideoView[]
+  likes             Like[]
+  favorites         Favorite[]
+  orderClicks       OrderClick[]
+  
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  
+  @@index([restaurantId])
+  @@index([dishId])
+  @@index([category])
+  @@index([isActive])
+  @@index([isSponsored])
+  @@index([popularityScore])
+  @@index([createdAt])
+}
+
+model VideoView {
+  id              String    @id @default(uuid())
+  userId          String
+  videoId         String
+  
+  // Métricas de visualización
+  watchTime       Int       @default(0)  // Segundos vistos
+  completed       Boolean   @default(false)  // Vió completo el video
+  
+  // Contexto
+  platform        String?   // 'ios', 'android', 'web'
+  location        Json?     // { lat, lng }
+  
+  // Relaciones
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video           Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime  @default(now())
+  
+  @@unique([userId, videoId])
+  @@index([videoId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Like {
+  id              String    @id @default(uuid())
+  userId          String
+  videoId         String
+  
+  // Relaciones
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video           Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime  @default(now())
+  
+  @@unique([userId, videoId])
+  @@index([videoId])
+  @@index([userId])
+}
+
+model Favorite {
+  id              String    @id @default(uuid())
+  userId          String
+  videoId         String
+  
+  // Relaciones
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video           Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime  @default(now())
+  
+  @@unique([userId, videoId])
+  @@index([videoId])
+  @@index([userId])
+}
+
+model OrderClick {
+  id              String    @id @default(uuid())
+  userId          String
+  videoId         String
+  platform        String    // 'uber', 'didi', 'rappi'
+  
+  // Contexto
+  location        Json?     // { lat, lng }
+  device          String?   // 'ios', 'android'
+  
+  // Relaciones
+  video           Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime  @default(now())
+  
+  @@index([videoId])
+  @@index([platform])
+  @@index([createdAt])
+}
