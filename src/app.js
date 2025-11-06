@@ -22,9 +22,13 @@ app.use(helmet());
 
 // 2. CORS - Permite peticiones desde el frontend
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.ALLOWED_ORIGINS?.split(',') 
+    : '*', // En desarrollo, permite todos los orígenes
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 app.use(cors(corsOptions));
 
@@ -57,6 +61,18 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV
+  });
+});
+
+// Ruta raíz - Info del servidor
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Plateo API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      api: '/api/v1'
+    }
   });
 });
 
