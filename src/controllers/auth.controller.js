@@ -7,13 +7,13 @@ class AuthController {
   
   /**
    * POST /api/v1/auth/register
-   * Registrar nuevo usuario
+   * Registrar nuevo usuario de nuevo 
    */
   async register(req, res, next) {
     try {
       const result = await authService.register(req.body);
       
-      return ApiResponse.created(res, result, 'Usuario registrado exitosamente');
+      return x.created(res, result, 'Usuario registrado exitosamente');
     } catch (error) {
       next(error);
     }
