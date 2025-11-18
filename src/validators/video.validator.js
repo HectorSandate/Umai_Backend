@@ -3,23 +3,81 @@
 const { body, param, query } = require('express-validator');
 
 const createVideoValidator = [
-  body('dishId')
+  // ========== CAMPOS NUEVOS REQUERIDOS ==========
+  body('restaurantName')
     .notEmpty()
-    .withMessage('El ID del platillo es requerido')
-    .isUUID()
-    .withMessage('El ID del platillo debe ser un UUID válido'),
+    .withMessage('El nombre del restaurante es requerido')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('El nombre del restaurante debe tener entre 2 y 100 caracteres'),
   
+  body('dishName')
+    .notEmpty()
+    .withMessage('El nombre del platillo es requerido')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('El nombre del platillo debe tener entre 2 y 100 caracteres'),
+  
+  body('price')
+    .notEmpty()
+    .withMessage('El precio es requerido')
+    .isFloat({ min: 0 })
+    .withMessage('El precio debe ser un número positivo'),
+  
+  body('description')
+    .notEmpty()
+    .withMessage('La descripción es requerida')
+    .trim()
+    .isLength({ min: 10, max: 500 })
+    .withMessage('La descripción debe tener entre 10 y 500 caracteres'),
+  
+  body('deliveryLinks')
+    .notEmpty()
+    .withMessage('Debe proporcionar al menos un link de delivery')
+    .custom((value) => {
+      // Si viene como string, parsearlo
+      let links = value;
+      if (typeof value === 'string') {
+        try {
+          links = JSON.parse(value);
+        } catch {
+          throw new Error('deliveryLinks debe ser un JSON válido');
+        }
+      }
+      
+      // Verificar que sea un objeto
+      if (typeof links !== 'object' || Array.isArray(links)) {
+        throw new Error('deliveryLinks debe ser un objeto');
+      }
+      
+      // Verificar que tenga al menos una plataforma
+      const platforms = Object.keys(links);
+      if (platforms.length === 0) {
+        throw new Error('Debe proporcionar al menos un link de delivery');
+      }
+      
+      // Verificar que las URLs sean válidas
+      const validPlatforms = ['uberEats', 'didiFood', 'rappi'];
+      for (const platform of platforms) {
+        if (!validPlatforms.includes(platform)) {
+          throw new Error(`Plataforma inválida: ${platform}. Use: uberEats, didiFood o rappi`);
+        }
+        
+        const url = links[platform];
+        if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+          throw new Error(`URL inválida para ${platform}`);
+        }
+      }
+      
+      return true;
+    }),
+  
+  // ========== CAMPOS OPCIONALES ==========
   body('title')
     .optional()
     .trim()
     .isLength({ min: 3, max: 100 })
     .withMessage('El título debe tener entre 3 y 100 caracteres'),
-  
-  body('description')
-    .optional()
-    .trim()
-    .isLength({ max: 500 })
-    .withMessage('La descripción no puede exceder 500 caracteres'),
   
   body('category')
     .optional()

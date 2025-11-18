@@ -2,24 +2,41 @@
 
 const database = require('../config/database');
 const prisma = database.getClient();
+const logger = require('../utils/logger');
+const { NotFoundError } = require('../utils/apiError');
 
 class DishRepository {
   
   /**
-   * Crear platillo
+   * ====== MÉTODO PRINCIPAL PARA CREAR PLATILLO ======
    */
   async create(data) {
-    return await prisma.dish.create({
-      data,
-      include: {
-        restaurant: {
-          select: {
-            id: true,
-            name: true
+    try {
+      return await prisma.dish.create({
+        data: {
+          name: data.name,
+          description: data.description,
+          price: data.price,
+          restaurantId: data.restaurantId,
+          category: data.category || 'OTRO',
+          uberEatsLink: data.uberEatsLink || null,
+          didiLink: data.didiLink || null,
+          rappiLink: data.rappiLink || null,
+          isAvailable: data.isAvailable !== undefined ? data.isAvailable : true
+        },
+        include: {
+          restaurant: {
+            select: {
+              id: true,
+              name: true
+            }
           }
         }
-      }
-    });
+      });
+    } catch (error) {
+      logger.error('Error al crear platillo:', error);
+      throw error;
+    }
   }
   
   /**
@@ -33,47 +50,29 @@ class DishRepository {
           select: {
             id: true,
             name: true,
-            phone: true,
-            address: true
+            address: true,
+            phone: true
           }
-        },
-        videos: {
-          where: { isActive: true },
-          take: 5,
-          orderBy: { createdAt: 'desc' }
         }
       }
     });
   }
   
   /**
-   * Listar platillos de un restaurante
+   * Buscar platillos de un restaurante
    */
   async findByRestaurant(restaurantId, options = {}) {
-    const {
-      skip = 0,
-      take = 20,
-      category = null,
-      isAvailable = true
-    } = options;
+    const { skip = 0, take = 50, isAvailable = true } = options;
     
-    const where = {
-      restaurantId,
-      ...(category && { category }),
-      ...(isAvailable !== null && { isAvailable })
-    };
-    
-    const [dishes, total] = await Promise.all([
-      prisma.dish.findMany({
-        skip,
-        take,
-        where,
-        orderBy: { createdAt: 'desc' }
-      }),
-      prisma.dish.count({ where })
-    ]);
-    
-    return { dishes, total };
+    return await prisma.dish.findMany({
+      where: {
+        restaurantId,
+        isAvailable
+      },
+      skip,
+      take,
+      orderBy: { createdAt: 'desc' }
+    });
   }
   
   /**
@@ -82,15 +81,7 @@ class DishRepository {
   async update(id, data) {
     return await prisma.dish.update({
       where: { id },
-      data,
-      include: {
-        restaurant: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
+      data
     });
   }
   
@@ -104,42 +95,14 @@ class DishRepository {
   }
   
   /**
-   * Buscar platillos por categoría
+   * Incrementar contador de vistas
    */
-  async findByCategory(category, options = {}) {
-    const {
-      skip = 0,
-      take = 20,
-      isAvailable = true
-    } = options;
-    
-    return await prisma.dish.findMany({
-      skip,
-      take,
-      where: {
-        category,
-        isAvailable
-      },
-      include: {
-        restaurant: {
-          select: {
-            id: true,
-            name: true,
-            rating: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-  }
-  
-  /**
-   * Actualizar disponibilidad
-   */
-  async updateAvailability(id, isAvailable) {
+  async incrementViews(id) {
     return await prisma.dish.update({
       where: { id },
-      data: { isAvailable }
+      data: {
+        viewsCount: { increment: 1 }
+      }
     });
   }
   
@@ -150,19 +113,33 @@ class DishRepository {
     return await prisma.dish.update({
       where: { id },
       data: {
-        totalOrders: { increment: 1 }
+        ordersCount: { increment: 1 }
       }
     });
   }
   
   /**
-   * Incrementar contador de vistas
+   * Obtener platillos populares
    */
-  async incrementViews(id) {
-    return await prisma.dish.update({
-      where: { id },
-      data: {
-        totalViews: { increment: 1 }
+  async findPopular(limit = 20) {
+    return await prisma.dish.findMany({
+      where: {
+        isAvailable: true
+      },
+      take: limit,
+      orderBy: [
+        { ordersCount: 'desc' },
+        { viewsCount: 'desc' }
+      ],
+      include: {
+        restaurant: {
+          select: {
+            id: true,
+            name: true,
+            logoUrl: true,
+            rating: true
+          }
+        }
       }
     });
   }

@@ -1,3 +1,5 @@
+// src/services/video.service.js
+
 const videoRepository = require('../repositories/video.repository');
 const dishRepository = require('../repositories/dish.repository');
 const restaurantRepository = require('../repositories/restaurant.repository');
@@ -9,93 +11,119 @@ const logger = require('../utils/logger');
 class VideoService {
   
   /**
-   * Crear video
+   * ========== MÉTODO ACTUALIZADO: Crear video con restaurante y platillo ==========
    */
   async create(userId, file, data) {
-    // Verificar que el restaurante puede subir más videos
-    await restaurantService.canUploadVideo(userId);
-    
-    // Obtener restaurante
-    const restaurant = await restaurantRepository.findByUserId(userId);
-    
-    if (!restaurant) {
-      throw new NotFoundError('Restaurante no encontrado');
-    }
-    
-    // Verificar que el platillo existe y pertenece al restaurante
-    const dish = await dishRepository.findById(data.dishId);
-    
-    if (!dish) {
-      throw new NotFoundError('Platillo no encontrado');
-    }
-    
-    if (dish.restaurantId !== restaurant.id) {
-      throw new ForbiddenError('El platillo no pertenece a tu restaurante');
-    }
-    
-    // Subir video a Cloudinary
-    logger.info(`Subiendo video a Cloudinary para restaurante ${restaurant.id}`);
-    const uploadResult = await cloudinaryService.uploadVideo(file.buffer, {
-      folder: `plateo/videos/${restaurant.id}`
-    });
-    
-    // Heredar enlaces de delivery del platillo si no se proporcionan
-    const deliveryLinks = data.deliveryLinks || {
-      uber: dish.uberEatsLink,
-      didi: dish.didiLink,
-      rappi: dish.rappiLink
-    };
-    
-    // IMPORTANTE: Parsear tags si viene como string
-    let tags = data.tags || [];
-    if (typeof tags === 'string') {
-      try {
-        tags = JSON.parse(tags);
-      } catch (error) {
-        logger.warn('Error al parsear tags, usando array vacío');
-        tags = [];
+    try {
+      // Verificar que el usuario puede subir más videos
+      await restaurantService.canUploadVideo(userId);
+      
+      // 1. PARSEAR DATOS QUE VIENEN COMO STRING
+      let tags = data.tags || [];
+      if (typeof tags === 'string') {
+        try {
+          tags = JSON.parse(tags);
+        } catch (error) {
+          logger.warn('Error al parsear tags, usando array vacío');
+          tags = [];
+        }
       }
-    }
-    
-    // Parsear deliveryLinks si viene como string
-    let parsedDeliveryLinks = deliveryLinks;
-    if (typeof deliveryLinks === 'string') {
-      try {
-        parsedDeliveryLinks = JSON.parse(deliveryLinks);
-      } catch (error) {
-        logger.warn('Error al parsear deliveryLinks');
-        parsedDeliveryLinks = {
-          uber: dish.uberEatsLink,
-          didi: dish.didiLink,
-          rappi: dish.rappiLink
-        };
+      
+      let deliveryLinks = data.deliveryLinks;
+      if (typeof deliveryLinks === 'string') {
+        try {
+          deliveryLinks = JSON.parse(deliveryLinks);
+        } catch (error) {
+          logger.error('Error al parsear deliveryLinks');
+          throw new ValidationError('deliveryLinks debe ser un JSON válido');
+        }
       }
+      
+      // 2. BUSCAR O CREAR RESTAURANTE
+      let restaurant = await restaurantRepository.findByUserId(userId);
+      
+      // Si el usuario no tiene restaurante, o si el nombre es diferente, buscar/crear
+      if (!restaurant || restaurant.name !== data.restaurantName) {
+        // Buscar restaurante por nombre
+        restaurant = await restaurantRepository.findByName(data.restaurantName);
+        
+        // Si no existe, crearlo
+        if (!restaurant) {
+          logger.info(`Creando nuevo restaurante: ${data.restaurantName}`);
+          restaurant = await restaurantRepository.create({
+            name: data.restaurantName,
+            description: `Restaurante ${data.restaurantName}`,
+            address: 'Por definir',
+            userId: userId,
+            phoneNumber: null,
+            isActive: true,
+            isVerified: false
+          });
+          logger.info(`Restaurante creado con ID: ${restaurant.id}`);
+        }
+      }
+      
+      // 3. CREAR PLATILLO (DISH)
+      logger.info(`Creando platillo: ${data.dishName} para restaurante ${restaurant.id}`);
+      const dish = await dishRepository.create({
+        name: data.dishName,
+        description: data.description,
+        price: parseFloat(data.price),
+        restaurantId: restaurant.id,
+        category: data.category || 'OTRO',
+        // Guardar los links de delivery en el platillo
+        uberEatsLink: deliveryLinks.uberEats || null,
+        didiLink: deliveryLinks.didiFood || null,
+        rappiLink: deliveryLinks.rappi || null,
+        isAvailable: true
+      });
+      logger.info(`Platillo creado con ID: ${dish.id}`);
+      
+      // 4. SUBIR VIDEO A CLOUDINARY
+      logger.info(`Subiendo video a Cloudinary para restaurante ${restaurant.id}`);
+      const uploadResult = await cloudinaryService.uploadVideo(file.buffer, {
+        folder: `umai/videos/${restaurant.id}`
+      });
+      logger.info(`Video subido a Cloudinary: ${uploadResult.publicId}`);
+      
+      // 5. CREAR VIDEO EN BASE DE DATOS
+      const video = await videoRepository.create({
+        restaurantId: restaurant.id,
+        dishId: dish.id,
+        cloudinaryUrl: uploadResult.url,
+        cloudinaryPublicId: uploadResult.publicId,
+        title: data.title || data.dishName, // Si no hay título, usar nombre del platillo
+        description: data.description,
+        duration: uploadResult.duration,
+        thumbnailUrl: uploadResult.url.replace(/\.[^.]+$/, '.jpg'),
+        tags: tags,
+        category: data.category || 'OTRO',
+        priceRange: data.priceRange,
+        deliveryLinks: {
+          uber: deliveryLinks.uberEats || null,
+          didi: deliveryLinks.didiFood || null,
+          rappi: deliveryLinks.rappi || null
+        },
+        isActive: true,
+        isPublic: true
+      });
+      logger.info(`Video creado con ID: ${video.id}`);
+      
+      // 6. INCREMENTAR CONTADOR DE VIDEOS DEL RESTAURANTE
+      await restaurantRepository.incrementVideosThisMonth(restaurant.id);
+      
+      logger.info(`✅ Video creado exitosamente: ${video.id}`);
+      
+      return {
+        video,
+        dish,
+        restaurant
+      };
+      
+    } catch (error) {
+      logger.error('❌ Error en VideoService.create:', error);
+      throw error;
     }
-    
-    // Crear video en base de datos
-    const video = await videoRepository.create({
-      restaurantId: restaurant.id,
-      dishId: data.dishId,
-      cloudinaryUrl: uploadResult.url,
-      cloudinaryPublicId: uploadResult.publicId,
-      title: data.title,
-      description: data.description,
-      duration: uploadResult.duration,
-      thumbnailUrl: uploadResult.url.replace(/\.[^.]+$/, '.jpg'),
-      tags: tags, // Array parseado
-      category: data.category || dish.category,
-      priceRange: data.priceRange,
-      deliveryLinks: parsedDeliveryLinks,
-      isActive: true,
-      isPublic: true
-    });
-    
-    // Incrementar contador de videos del restaurante
-    await restaurantRepository.incrementVideosThisMonth(restaurant.id);
-    
-    logger.info(`Video creado exitosamente: ${video.id}`);
-    
-    return video;
   }
   
   /**

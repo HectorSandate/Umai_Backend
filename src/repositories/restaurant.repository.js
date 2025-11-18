@@ -2,6 +2,7 @@
 
 const database = require('../config/database');
 const prisma = database.getClient();
+const logger = require('../utils/logger');
 
 class RestaurantRepository {
   
@@ -50,6 +51,26 @@ class RestaurantRepository {
     return await prisma.restaurant.findUnique({
       where: { userId }
     });
+  }
+  
+  /**
+   * ====== NUEVO MÉTODO ======
+   * Buscar restaurante por nombre (case-insensitive)
+   */
+  async findByName(name) {
+    try {
+      return await prisma.restaurant.findFirst({
+        where: {
+          name: {
+            equals: name,
+            mode: 'insensitive'
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Error en findByName:', error);
+      return null;
+    }
   }
   
   /**
