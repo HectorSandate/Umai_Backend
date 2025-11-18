@@ -53,7 +53,6 @@ class AuthService {
           address: restaurantData.address || 'Por definir',
           phone: restaurantData.phoneNumber || phone,
           isActive: true,
-          isVerified: false,
           subscriptionTier: 'FREE',
           maxVideosPerMonth: 10,
           canSponsorVideos: false,
