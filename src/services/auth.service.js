@@ -51,7 +51,7 @@ class AuthService {
           name: restaurantData.name,
           description: restaurantData.description || `Restaurante ${restaurantData.name}`,
           address: restaurantData.address || 'Por definir',
-          phoneNumber: restaurantData.phoneNumber || phone,
+          phone: restaurantData.phoneNumber || phone,
           isActive: true,
           isVerified: false,
           subscriptionTier: 'FREE',
