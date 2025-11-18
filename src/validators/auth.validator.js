@@ -27,7 +27,41 @@ const registerValidator = [
   
   body('phone')
     .optional()
-    .isMobilePhone('es-MX').withMessage('Número de teléfono inválido')
+    .isMobilePhone('es-MX').withMessage('Número de teléfono inválido'),
+  
+  // ========== VALIDACIONES PARA RESTAURANTES ==========
+  // Solo se aplican si role = 'RESTAURANT'
+  
+  body('restaurantData')
+    .if(body('role').equals('RESTAURANT'))
+    .notEmpty()
+    .withMessage('Los datos del restaurante son requeridos para registro de restaurante'),
+  
+  body('restaurantData.name')
+    .if(body('role').equals('RESTAURANT'))
+    .notEmpty()
+    .withMessage('El nombre del restaurante es requerido')
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('El nombre del restaurante debe tener entre 2 y 100 caracteres'),
+  
+  body('restaurantData.description')
+    .if(body('role').equals('RESTAURANT'))
+    .optional()
+    .trim()
+    .isLength({ min: 10, max: 500 })
+    .withMessage('La descripción debe tener entre 10 y 500 caracteres'),
+  
+  body('restaurantData.address')
+    .if(body('role').equals('RESTAURANT'))
+    .notEmpty()
+    .withMessage('La dirección del restaurante es requerida')
+    .trim(),
+  
+  body('restaurantData.phoneNumber')
+    .if(body('role').equals('RESTAURANT'))
+    .optional()
+    .trim()
 ];
 
 /**

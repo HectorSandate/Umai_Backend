@@ -24,10 +24,15 @@ class AuthMiddleware {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // 3. Verificar que el usuario aún existe
-      const user = await userRepository.findById(decoded.userId);
+      // ⚠️ CORRECCIÓN: decoded.id (no decoded.userId)
+      const user = await userRepository.findById(decoded.id);
       
       if (!user) {
         throw new UnauthorizedError('Usuario no encontrado');
+      }
+      
+      if (!user.isActive) {
+        throw new UnauthorizedError('Usuario desactivado');
       }
       
       // 4. Agregar usuario a la request para que lo usen los controllers
@@ -77,6 +82,16 @@ class AuthMiddleware {
   isDelivery(req, res, next) {
     if (req.user.role !== 'DELIVERY') {
       return next(new ForbiddenError('Solo repartidores pueden realizar esta acción'));
+    }
+    next();
+  }
+  
+  /**
+   * Verificar que el usuario sea cliente O restaurante (para acciones comunes)
+   */
+  isCustomerOrRestaurant(req, res, next) {
+    if (!['CUSTOMER', 'RESTAURANT'].includes(req.user.role)) {
+      return next(new ForbiddenError('Acción no permitida para tu tipo de cuenta'));
     }
     next();
   }
