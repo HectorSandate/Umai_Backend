@@ -9,8 +9,11 @@ class UserRepository {
    * Crear nuevo usuario
    */
   async create(data) {
+    // ✅ Eliminar isActive del data antes de enviarlo a Prisma
+    const { isActive, ...userData } = data;
+    
     return await prisma.user.create({
-      data,
+      data: userData,
       select: {
         id: true,
         email: true,
@@ -37,6 +40,7 @@ class UserRepository {
         name: true,
         phone: true,
         role: true,
+        password: true, // ✅ Incluir password para auth
         avatarUrl: true,
         location: true,
         preferences: true,
@@ -77,9 +81,12 @@ class UserRepository {
    * Actualizar usuario
    */
   async update(id, data) {
+    // ✅ Eliminar isActive del data si viene
+    const { isActive, ...updateData } = data;
+    
     return await prisma.user.update({
       where: { id },
-      data,
+      data: updateData,
       select: {
         id: true,
         email: true,

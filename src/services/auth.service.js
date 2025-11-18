@@ -24,14 +24,14 @@ class AuthService {
     // 2. Hash de contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    // 3. Crear usuario
+    // 3. Crear usuario (sin isActive)
     const user = await userRepository.create({
       email,
       password: hashedPassword,
       name,
       phone,
-      role: role,
-      isActive: true
+      role: role
+      // ❌ ELIMINADO: isActive: true
     });
     
     logger.info(`✅ Usuario creado: ${user.id} - ${user.email} - Rol: ${user.role}`);
@@ -109,12 +109,12 @@ class AuthService {
       throw new UnauthorizedError('Credenciales inválidas');
     }
     
-    // 3. Verificar que el usuario esté activo
-    if (!user.isActive) {
-      throw new UnauthorizedError('Usuario desactivado');
-    }
+    // ❌ ELIMINADO: Verificación de isActive
+    // if (!user.isActive) {
+    //   throw new UnauthorizedError('Usuario desactivado');
+    // }
     
-    // 4. Si es restaurante, obtener datos del restaurante
+    // 3. Si es restaurante, obtener datos del restaurante
     let restaurant = null;
     if (user.role === 'RESTAURANT') {
       restaurant = await restaurantRepository.findByUserId(user.id);
@@ -124,7 +124,7 @@ class AuthService {
       }
     }
     
-    // 5. Generar tokens
+    // 4. Generar tokens
     const tokens = this.generateTokens(user);
     
     return {
@@ -149,7 +149,6 @@ class AuthService {
    * ========== LOGOUT ==========
    */
   async logout(userId) {
-    // Aquí podrías invalidar tokens en una blacklist si lo implementas
     logger.info(`Usuario ${userId} cerró sesión`);
     return { message: 'Sesión cerrada exitosamente' };
   }
@@ -177,7 +176,8 @@ class AuthService {
         name: user.name,
         phone: user.phone,
         role: user.role,
-        isActive: user.isActive,
+        // ❌ ELIMINADO: isActive: user.isActive,
+        isVerified: user.isVerified,
         createdAt: user.createdAt
       },
       restaurant: restaurant ? {
@@ -226,7 +226,7 @@ class AuthService {
    */
   generateTokens(user) {
     const payload = {
-      id: user.id,           // ⚠️ IMPORTANTE: Usar 'id' no 'userId'
+      id: user.id,
       email: user.email,
       role: user.role
     };
@@ -239,7 +239,7 @@ class AuthService {
     
     const refreshToken = jwt.sign(
       payload,
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, // Fallback
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
     
@@ -269,9 +269,14 @@ class AuthService {
       
       const user = await userRepository.findById(decoded.id);
       
-      if (!user || !user.isActive) {
+      if (!user) {
         throw new UnauthorizedError('Usuario no válido');
       }
+      
+      // ❌ ELIMINADO: Verificación de isActive
+      // if (!user.isActive) {
+      //   throw new UnauthorizedError('Usuario no válido');
+      // }
       
       const tokens = this.generateTokens(user);
       

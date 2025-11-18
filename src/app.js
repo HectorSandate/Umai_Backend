@@ -14,6 +14,13 @@ const logger = require('./utils/logger');
 const app = express();
 
 // ==========================================
+// ✅ TRUST PROXY (AGREGAR AL INICIO)
+// ==========================================
+// Necesario para Render, Heroku, Railway, etc.
+// Esto permite que express-rate-limit funcione correctamente
+app.set('trust proxy', 1);
+
+// ==========================================
 // MIDDLEWARES GLOBALES
 // ==========================================
 
@@ -67,7 +74,7 @@ app.get('/health', (req, res) => {
 // Ruta raíz - Info del servidor
 app.get('/', (req, res) => {
   res.json({
-    message: 'Plateo API',
+    message: 'UMAI API', // ✅ Cambiado de Plateo a UMAI
     version: '1.0.0',
     endpoints: {
       health: '/health',

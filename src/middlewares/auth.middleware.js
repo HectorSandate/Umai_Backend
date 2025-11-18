@@ -24,16 +24,16 @@ class AuthMiddleware {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       
       // 3. Verificar que el usuario aún existe
-      // ⚠️ CORRECCIÓN: decoded.id (no decoded.userId)
       const user = await userRepository.findById(decoded.id);
       
       if (!user) {
         throw new UnauthorizedError('Usuario no encontrado');
       }
       
-      if (!user.isActive) {
-        throw new UnauthorizedError('Usuario desactivado');
-      }
+      // ❌ ELIMINADO: Verificación de isActive
+      // if (!user.isActive) {
+      //   throw new UnauthorizedError('Usuario desactivado');
+      // }
       
       // 4. Agregar usuario a la request para que lo usen los controllers
       req.user = {
