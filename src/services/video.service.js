@@ -89,36 +89,7 @@ class VideoService {
       isActive: true,
       isPublic: true
     });
-     /**
-   * Actualizar delivery links del video
-   */
-  async updateDeliveryLinks(userId, videoId, deliveryLinks) {
-    // Obtener el video
-    const video = await videoRepository.findById(videoId);
     
-    if (!video) {
-      throw new NotFoundError('Video no encontrado');
-    }
-    
-    // Verificar que el video pertenece al restaurante del usuario
-    const restaurant = await restaurantRepository.findByUserId(userId);
-    
-    if (!restaurant || video.restaurantId !== restaurant.id) {
-      throw new ForbiddenError(
-        'No tienes permiso para actualizar este video'
-      );
-    }
-    
-    // Actualizar solo los delivery links
-    const updated = await videoRepository.update(videoId, {
-      deliveryLinks
-    });
-    
-    logger.info(`Delivery links actualizados para video ${videoId}`);
-    
-    return updated;
-  }
-}
     // Incrementar contador de videos del restaurante
     await restaurantRepository.incrementVideosThisMonth(restaurant.id);
     

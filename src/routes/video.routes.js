@@ -37,14 +37,6 @@ router.get(
   '/restaurant/:restaurantId',
   videoController.getByRestaurant
 );
-  
-// PATCH /api/v1/videos/:id/delivery-links (actualizar links de delivery)
-router.patch(
-  '/:id/delivery-links',
-  authMiddleware.verifyToken,
-  authMiddleware.isRestaurant,
-  videoController.updateDeliveryLinks
-);
 
 // Rutas protegidas
 // POST /api/v1/videos (crear video - solo restaurantes)

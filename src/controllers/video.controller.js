@@ -52,49 +52,6 @@ class VideoController {
   }
   
   /**
-   * PATCH /api/v1/videos/:id/delivery-links
-   * Actualizar links de delivery
-   */
-  async updateDeliveryLinks(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { id } = req.params;
-      const { uberEats, didiFood, rappi } = req.body;
-
-      // Validar que al menos un link esté presente
-      if (!uberEats && !didiFood && !rappi) {
-        return ApiResponse.error(
-          res,
-          'Debes proporcionar al menos un link de delivery',
-          400
-        );
-      }
-
-      // Construir objeto de delivery links
-      const deliveryLinks = {};
-      if (uberEats) deliveryLinks.uberEats = uberEats;
-      if (didiFood) deliveryLinks.didiFood = didiFood;
-      if (rappi) deliveryLinks.rappi = rappi;
-
-      // Actualizar usando el servicio
-      const updated = await videoService.updateDeliveryLinks(
-        userId,
-        id,
-        deliveryLinks
-      );
-
-      return ApiResponse.success(
-        res,
-        updated,
-        'Links de delivery actualizados exitosamente'
-      );
-    } catch (error) {
-      next(error);
-    }
-  }
-}
-
-  /**
    * GET /api/v1/videos/:id
    * Obtener video por ID
    */
