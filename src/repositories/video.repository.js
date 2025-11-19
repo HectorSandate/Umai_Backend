@@ -374,19 +374,20 @@ class VideoRepository {
   /**
    * Obtener videos para el algoritmo de recomendación
    */
-  async findForRecommendation(userId, limit = 20) {
-    // Obtener IDs de videos ya vistos recientemente (aumentar a 100 para más diversidad)
+  async findForRecommendation(userId, limit = 20, excludeCount = 100) {
+    // Obtener IDs de videos ya vistos recientemente
+    // excludeCount permite excluir más videos según la página (para paginación)
     const recentViews = await prisma.videoView.findMany({
       where: { userId },
       select: { videoId: true },
       orderBy: { createdAt: 'desc' },
-      take: 100 // Aumentado de 30 a 100 para evitar más repeticiones
+      take: excludeCount
     });
     
     const viewedVideoIds = recentViews.map(v => v.videoId);
     
     // Obtener videos candidatos con orden aleatorio parcial para diversidad
-    // Traer más videos para tener más opciones de diversificación
+    // Traer más videos para tener más opciones de diversificación y paginación
     return await prisma.video.findMany({
       where: {
         isActive: true,
@@ -418,7 +419,7 @@ class VideoRepository {
         { popularityScore: 'desc' },
         { createdAt: 'desc' }
       ],
-      take: limit * 10 // Traer más para poder filtrar y diversificar después
+      take: limit * 15 // Traer más para poder filtrar, diversificar y paginar después
     });
   }
 }

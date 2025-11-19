@@ -10,23 +10,30 @@ class RecommendationService {
   /**
    * Generar feed personalizado para el usuario
    */
-  async generateFeed(userId, limit = 20) {
-    logger.info(`Generando feed para usuario ${userId}`);
+  async generateFeed(userId, page = 1, limit = 20) {
+    logger.info(`Generando feed para usuario ${userId}, página ${page}, límite ${limit}`);
     
     // Obtener usuario con historial
     const user = await userRepository.findById(userId);
     
     if (!user) {
       // Si no hay usuario, devolver videos populares
-      return await this.getTrendingVideos(limit);
+      return await this.getTrendingVideos(page, limit);
     }
     
-    // Obtener videos candidatos (excluyendo vistos recientemente)
-    const candidateVideos = await videoRepository.findForRecommendation(userId, limit);
+    // Calcular cuántos videos excluir basado en la página
+    // Para página 1: excluir últimos 100 vistos
+    // Para página 2: excluir últimos 100 + 20 (videos de página 1)
+    // Para página 3: excluir últimos 100 + 40 (videos de páginas 1 y 2)
+    // etc.
+    const videosToExclude = 100 + ((page - 1) * limit);
+    
+    // Obtener videos candidatos (excluyendo vistos recientemente + videos de páginas anteriores)
+    const candidateVideos = await videoRepository.findForRecommendation(userId, limit, videosToExclude);
     
     if (candidateVideos.length === 0) {
       // Si no hay candidatos, devolver trending
-      return await this.getTrendingVideos(limit);
+      return await this.getTrendingVideos(page, limit);
     }
     
     // Calcular score para cada video
@@ -39,17 +46,22 @@ class RecommendationService {
     scoredVideos.sort((a, b) => b.recommendationScore - a.recommendationScore);
     
     // Aplicar diversificación para evitar siempre los mismos videos
-    const diversifiedVideos = this.diversifyFeed(scoredVideos, limit * 2);
+    // Necesitamos más videos para poder paginar correctamente
+    const diversifiedVideos = this.diversifyFeed(scoredVideos, limit * 3);
     
     // Mezclar videos patrocinados
-    const finalFeed = this.injectSponsoredVideos(diversifiedVideos, limit);
+    const finalFeed = this.injectSponsoredVideos(diversifiedVideos, limit * 3);
     
-    // Eliminar duplicados por ID antes de devolver
+    // Eliminar duplicados por ID antes de paginar
     const uniqueFeed = this.removeDuplicates(finalFeed);
     
-    logger.info(`Feed generado con ${uniqueFeed.length} videos únicos`);
+    // Aplicar paginación
+    const skip = (page - 1) * limit;
+    const paginatedFeed = uniqueFeed.slice(skip, skip + limit);
     
-    return uniqueFeed.slice(0, limit);
+    logger.info(`Feed generado: página ${page}, ${paginatedFeed.length} videos de ${uniqueFeed.length} disponibles`);
+    
+    return paginatedFeed;
   }
   
   /**
@@ -317,15 +329,31 @@ class RecommendationService {
   /**
    * Obtener videos en tendencia
    */
-  async getTrendingVideos(limit = 20) {
+  async getTrendingVideos(page = 1, limit = 20) {
+    // Para paginación, necesitamos traer más videos desde el inicio
+    // y luego aplicar paginación después de diversificar
+    const skip = (page - 1) * limit;
+    
+    // Traer suficientes videos para poder paginar y diversificar
+    // Traemos desde el inicio para tener más opciones
     const { videos } = await videoRepository.findAll({
-      take: limit * 2, // Traer más para diversificar
+      skip: 0, // Siempre desde el inicio
+      take: (skip + limit) * 2, // Traer suficientes para la página actual
       orderBy: { popularityScore: 'desc' }
     });
     
+    if (videos.length === 0) {
+      return [];
+    }
+    
     // Aplicar diversificación y eliminar duplicados
-    const diversified = this.diversifyFeed(videos, limit);
-    return this.removeDuplicates(diversified).slice(0, limit);
+    const diversified = this.diversifyFeed(videos, videos.length);
+    const unique = this.removeDuplicates(diversified);
+    
+    // Aplicar paginación después de diversificar
+    const paginated = unique.slice(skip, skip + limit);
+    
+    return paginated;
   }
   
   /**
