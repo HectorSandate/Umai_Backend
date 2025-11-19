@@ -57,10 +57,12 @@ const createVideoValidator = [
       }
       
       // Verificar que las URLs sean válidas
-      const validPlatforms = ['uberEats', 'didiFood', 'rappi'];
+      // Aceptar ambas formas: las cortas (uber, didi, rappi) y las largas (uberEats, didiFood, rappi)
+      const validPlatforms = ['uber', 'uberEats', 'didi', 'didiFood', 'rappi'];
+      
       for (const platform of platforms) {
         if (!validPlatforms.includes(platform)) {
-          throw new Error(`Plataforma inválida: ${platform}. Use: uberEats, didiFood o rappi`);
+          throw new Error(`Plataforma inválida: ${platform}. Use: uber/uberEats, didi/didiFood o rappi`);
         }
         
         const url = links[platform];
@@ -68,6 +70,8 @@ const createVideoValidator = [
           throw new Error(`URL inválida para ${platform}`);
         }
       }
+      
+      return true;
       
       return true;
     }),

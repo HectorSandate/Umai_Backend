@@ -39,6 +39,21 @@ class VideoService {
         }
       }
       
+      // Normalizar las claves de deliveryLinks (aceptar tanto formas cortas como largas)
+      // Formas cortas: uber, didi, rappi
+      // Formas largas: uberEats, didiFood, rappi
+      const normalizedDeliveryLinks = {};
+      if (deliveryLinks.uber || deliveryLinks.uberEats) {
+        normalizedDeliveryLinks.uberEats = deliveryLinks.uberEats || deliveryLinks.uber;
+      }
+      if (deliveryLinks.didi || deliveryLinks.didiFood) {
+        normalizedDeliveryLinks.didiFood = deliveryLinks.didiFood || deliveryLinks.didi;
+      }
+      if (deliveryLinks.rappi) {
+        normalizedDeliveryLinks.rappi = deliveryLinks.rappi;
+      }
+      deliveryLinks = normalizedDeliveryLinks;
+      
       // 2. BUSCAR O CREAR RESTAURANTE
       let restaurant = await restaurantRepository.findByUserId(userId);
       
