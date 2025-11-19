@@ -375,23 +375,24 @@ class VideoRepository {
    * Obtener videos para el algoritmo de recomendación
    */
   async findForRecommendation(userId, limit = 20) {
-    // Obtener IDs de videos ya vistos recientemente
+    // Obtener IDs de videos ya vistos recientemente (aumentar a 100 para más diversidad)
     const recentViews = await prisma.videoView.findMany({
       where: { userId },
       select: { videoId: true },
       orderBy: { createdAt: 'desc' },
-      take: 30
+      take: 100 // Aumentado de 30 a 100 para evitar más repeticiones
     });
     
     const viewedVideoIds = recentViews.map(v => v.videoId);
     
-    // Obtener videos candidatos
+    // Obtener videos candidatos con orden aleatorio parcial para diversidad
+    // Traer más videos para tener más opciones de diversificación
     return await prisma.video.findMany({
       where: {
         isActive: true,
         isPublic: true,
         id: {
-          notIn: viewedVideoIds
+          notIn: viewedVideoIds.length > 0 ? viewedVideoIds : []
         }
       },
       include: {
@@ -413,7 +414,11 @@ class VideoRepository {
           }
         }
       },
-      take: limit * 5 // Traer más para poder filtrar después
+      orderBy: [
+        { popularityScore: 'desc' },
+        { createdAt: 'desc' }
+      ],
+      take: limit * 10 // Traer más para poder filtrar y diversificar después
     });
   }
 }

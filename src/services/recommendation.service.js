@@ -38,12 +38,18 @@ class RecommendationService {
     // Ordenar por score
     scoredVideos.sort((a, b) => b.recommendationScore - a.recommendationScore);
     
+    // Aplicar diversificación para evitar siempre los mismos videos
+    const diversifiedVideos = this.diversifyFeed(scoredVideos, limit * 2);
+    
     // Mezclar videos patrocinados
-    const finalFeed = this.injectSponsoredVideos(scoredVideos, limit);
+    const finalFeed = this.injectSponsoredVideos(diversifiedVideos, limit);
     
-    logger.info(`Feed generado con ${finalFeed.length} videos`);
+    // Eliminar duplicados por ID antes de devolver
+    const uniqueFeed = this.removeDuplicates(finalFeed);
     
-    return finalFeed.slice(0, limit);
+    logger.info(`Feed generado con ${uniqueFeed.length} videos únicos`);
+    
+    return uniqueFeed.slice(0, limit);
   }
   
   /**
@@ -193,7 +199,14 @@ class RecommendationService {
   injectSponsoredVideos(organicVideos, limit) {
     const now = new Date();
     
-    // Filtrar videos patrocinados activos
+    // Separar videos orgánicos de patrocinados para evitar duplicados
+    const organicOnly = organicVideos.filter(v => 
+      !v.isSponsored || 
+      !v.sponsoredUntil || 
+      new Date(v.sponsoredUntil) <= now
+    );
+    
+    // Obtener videos patrocinados activos (pueden venir de otra fuente o estar en la lista)
     const sponsoredVideos = organicVideos.filter(v => 
       v.isSponsored && 
       v.sponsoredUntil && 
@@ -201,27 +214,104 @@ class RecommendationService {
     );
     
     if (sponsoredVideos.length === 0) {
-      return organicVideos;
+      return organicOnly;
     }
     
     // Mezclar: cada 5 videos orgánicos, 1 patrocinado
     const mixed = [];
     let sponsoredIndex = 0;
+    const usedSponsoredIds = new Set(); // Para evitar duplicados
     
-    for (let i = 0; i < organicVideos.length && mixed.length < limit; i++) {
+    for (let i = 0; i < organicOnly.length && mixed.length < limit * 2; i++) {
       // Cada 5 videos, insertar uno patrocinado
       if (i > 0 && i % 5 === 0 && sponsoredIndex < sponsoredVideos.length) {
-        mixed.push({
-          ...sponsoredVideos[sponsoredIndex],
-          isAd: true // Flag para el frontend
-        });
-        sponsoredIndex++;
+        const sponsored = sponsoredVideos[sponsoredIndex];
+        // Solo agregar si no está ya en la lista
+        if (!usedSponsoredIds.has(sponsored.id)) {
+          mixed.push({
+            ...sponsored,
+            isAd: true // Flag para el frontend
+          });
+          usedSponsoredIds.add(sponsored.id);
+          sponsoredIndex++;
+        }
       }
       
-      mixed.push(organicVideos[i]);
+      mixed.push(organicOnly[i]);
     }
     
     return mixed;
+  }
+  
+  /**
+   * Diversificar el feed para evitar siempre los mismos videos
+   */
+  diversifyFeed(videos, limit) {
+    if (videos.length <= limit) {
+      return videos;
+    }
+    
+    const diversified = [];
+    const usedRestaurantIds = new Map(); // restaurantId -> count
+    const usedVideoIds = new Set();
+    const maxVideosPerRestaurant = Math.ceil(limit / 3); // Máximo 1/3 del feed del mismo restaurante
+    
+    // Primero, tomar los mejores videos pero limitando por restaurante
+    for (const video of videos) {
+      if (diversified.length >= limit) break;
+      
+      const restaurantId = video.restaurantId;
+      const count = usedRestaurantIds.get(restaurantId) || 0;
+      
+      // Si no hemos excedido el límite por restaurante y el video no está duplicado
+      if (count < maxVideosPerRestaurant && !usedVideoIds.has(video.id)) {
+        diversified.push(video);
+        usedRestaurantIds.set(restaurantId, count + 1);
+        usedVideoIds.add(video.id);
+      }
+    }
+    
+    // Si aún no tenemos suficientes videos, añadir más sin restricción de restaurante
+    if (diversified.length < limit) {
+      for (const video of videos) {
+        if (diversified.length >= limit) break;
+        if (!usedVideoIds.has(video.id)) {
+          diversified.push(video);
+          usedVideoIds.add(video.id);
+        }
+      }
+    }
+    
+    // Mezclar aleatoriamente un poco para añadir variedad (manteniendo calidad)
+    // Mezclar solo los últimos 30% para no perder los mejores
+    const topCount = Math.floor(diversified.length * 0.7);
+    const topVideos = diversified.slice(0, topCount);
+    const restVideos = diversified.slice(topCount);
+    
+    // Mezclar aleatoriamente el resto
+    for (let i = restVideos.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [restVideos[i], restVideos[j]] = [restVideos[j], restVideos[i]];
+    }
+    
+    return [...topVideos, ...restVideos];
+  }
+  
+  /**
+   * Eliminar videos duplicados del feed
+   */
+  removeDuplicates(videos) {
+    const seen = new Set();
+    const unique = [];
+    
+    for (const video of videos) {
+      if (!seen.has(video.id)) {
+        seen.add(video.id);
+        unique.push(video);
+      }
+    }
+    
+    return unique;
   }
   
   /**
@@ -229,11 +319,13 @@ class RecommendationService {
    */
   async getTrendingVideos(limit = 20) {
     const { videos } = await videoRepository.findAll({
-      take: limit,
+      take: limit * 2, // Traer más para diversificar
       orderBy: { popularityScore: 'desc' }
     });
     
-    return videos;
+    // Aplicar diversificación y eliminar duplicados
+    const diversified = this.diversifyFeed(videos, limit);
+    return this.removeDuplicates(diversified).slice(0, limit);
   }
   
   /**
